@@ -154,6 +154,65 @@ def list_documents(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Delete document
+# ---------------------------------------------------------------------------
+@router.delete(
+    "/documents/{document_id}",
+    tags=["Documents"],
+    summary="Delete a document and rebuild the FAISS index",
+)
+def delete_document(document_id: str, db: Session = Depends(get_db)):
+    """
+    Delete a document by ID.
+    - Removes the record from PostgreSQL.
+    - Rebuilds the FAISS index without the deleted document's chunks.
+    """
+    import uuid as _uuid
+    try:
+        doc_uuid = _uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid document ID format: {document_id}",
+        )
+    doc = db.query(Document).filter(Document.id == doc_uuid).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} not found.",
+        )
+
+    pipeline = get_pipeline()
+    filename = doc.original_filename
+
+    # Remove from DB
+    db.delete(doc)
+    db.commit()
+
+    # Rebuild FAISS index excluding deleted document's chunks
+    remaining_chunks = [
+        c for c in pipeline.vector_store._chunks
+        if c.source != filename
+    ]
+
+    if remaining_chunks:
+        import numpy as np
+        pipeline.vector_store.create_index()
+        embeddings = pipeline.embedder.embed_chunks(remaining_chunks)
+        pipeline.vector_store.add_chunks(remaining_chunks, embeddings)
+        pipeline.vector_store.save()
+    else:
+        pipeline.vector_store.reset()
+
+    # Reset generator so it picks up the updated vector store
+    global _generator
+    _generator = None
+
+    logger.info(f"Document '{filename}' deleted and index rebuilt.")
+    return {"message": f"Document '{filename}' deleted successfully."}
+
+
+# ---------------------------------------------------------------------------
 # Query
 # ---------------------------------------------------------------------------
 @router.post(

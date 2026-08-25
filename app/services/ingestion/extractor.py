@@ -8,6 +8,8 @@ from typing import List
 
 import chardet
 import pypdf
+import pytesseract
+from pdf2image import convert_from_path
 from docx import Document as DocxDocument
 
 logger = logging.getLogger(__name__)
@@ -69,6 +71,11 @@ class TextExtractor:
                 if cleaned:
                     pages.append(PageContent(page_number=i, text=cleaned, source=filename))
 
+        # Fallback: OCR for scanned/image-based PDFs
+        if not pages:
+            logger.info(f"No text found via pypdf — falling back to OCR for {filename}")
+            pages = self._ocr_pdf(path, filename)
+
         logger.info(f"PDF extraction complete: {len(pages)} pages with text")
         return ExtractionResult(
             filename=filename,
@@ -76,6 +83,21 @@ class TextExtractor:
             total_pages=len(pages),
             pages=pages,
         )
+
+    def _ocr_pdf(self, path: Path, filename: str) -> List[PageContent]:
+        """Convert each PDF page to an image and run Tesseract OCR."""
+        pages: List[PageContent] = []
+        try:
+            images = convert_from_path(str(path), dpi=200)
+            for i, image in enumerate(images, start=1):
+                raw = pytesseract.image_to_string(image, lang="eng")
+                cleaned = self._clean_text(raw)
+                if cleaned:
+                    pages.append(PageContent(page_number=i, text=cleaned, source=filename))
+            logger.info(f"OCR complete: {len(pages)} pages extracted from {filename}")
+        except Exception as exc:
+            logger.error(f"OCR failed for {filename}: {exc}")
+        return pages
 
     # ------------------------------------------------------------------
     # DOCX

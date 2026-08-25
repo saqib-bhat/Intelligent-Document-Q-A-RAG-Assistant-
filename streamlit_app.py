@@ -51,6 +51,12 @@ def list_documents() -> list:
     return response.json()
 
 
+def delete_document(doc_id: str) -> dict:
+    response = requests.delete(f"{API_BASE}/documents/{doc_id}", timeout=60)
+    response.raise_for_status()
+    return response.json()
+
+
 def health_check() -> bool:
     try:
         r = requests.get(f"{API_BASE}/health", timeout=5)
@@ -126,7 +132,20 @@ with st.sidebar:
         if docs:
             for doc in docs:
                 status_icon = "✅" if doc["status"] == "ready" else "⏳"
-                st.markdown(f"{status_icon} {doc['original_filename']}")
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.markdown(f"{status_icon} {doc['original_filename']}")
+                with col2:
+                    if st.button("🗑️", key=f"del_{doc['id']}", help=f"Delete {doc['original_filename']}"):
+                        with st.spinner(f"Deleting {doc['original_filename']}…"):
+                            try:
+                                delete_document(doc["id"])
+                                st.success("Deleted!")
+                                st.rerun()
+                            except requests.HTTPError as e:
+                                st.error(f"Failed: {e.response.json().get('detail', str(e))}")
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
         else:
             st.caption("No documents uploaded yet.")
     except Exception:
