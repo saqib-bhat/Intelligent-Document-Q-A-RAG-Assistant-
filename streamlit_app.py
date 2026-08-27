@@ -109,7 +109,13 @@ with st.sidebar:
                     )
                     st.session_state.uploaded_docs.append(doc["original_filename"])
                 except requests.HTTPError as e:
-                    st.error(f"Upload failed: {e.response.json().get('detail', str(e))}")
+                    try:
+                        detail = e.response.json().get('detail', str(e))
+                    except Exception:
+                        detail = f"Server returned status {e.response.status_code} — request may have timed out. Try a smaller or text-based PDF."
+                    st.error(f"Upload failed: {detail}")
+                except requests.exceptions.Timeout:
+                    st.error("Upload timed out — the file may be too large or require OCR. Try a text-based PDF.")
                 except Exception as e:
                     st.error(f"Upload failed: {e}")
 

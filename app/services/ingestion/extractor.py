@@ -76,6 +76,13 @@ class TextExtractor:
             logger.info(f"No text found via pypdf — falling back to OCR for {filename}")
             pages = self._ocr_pdf(path, filename)
 
+        if not pages:
+            raise ValueError(
+                f"No text could be extracted from '{filename}'. "
+                "This appears to be a scanned or image-only PDF. "
+                "Please upload a text-based PDF, DOCX, or TXT file."
+            )
+
         logger.info(f"PDF extraction complete: {len(pages)} pages with text")
         return ExtractionResult(
             filename=filename,
