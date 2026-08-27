@@ -36,6 +36,9 @@ COPY streamlit_app.py .
 COPY tests/ ./tests/
 COPY pytest.ini .
 
+# Pre-download fastembed model so first upload doesn't timeout
+RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/all-MiniLM-L6-v2').embed(['warmup']))"
+
 # Create necessary directories
 RUN mkdir -p faiss_index uploads mlflow_runs
 
