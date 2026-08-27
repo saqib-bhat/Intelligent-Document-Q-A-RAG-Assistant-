@@ -22,6 +22,15 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     create_tables()
     logger.info("Database tables verified.")
+
+    # Pre-warm the embedding model so the first upload is fast
+    try:
+        from app.api.routes import get_pipeline
+        get_pipeline()
+        logger.info("Embedding model pre-loaded successfully.")
+    except Exception as exc:
+        logger.warning(f"Model pre-warm failed (non-fatal): {exc}")
+
     yield
     logger.info("Shutting down.")
 
